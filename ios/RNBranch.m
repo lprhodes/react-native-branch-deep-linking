@@ -159,7 +159,6 @@ RCT_EXPORT_MODULE();
     return handled;
 }
 
-<<<<<<< HEAD
 RCT_EXPORT_METHOD(
                   handleDeepLinkInternal:(NSURL *)url
                   ) {
@@ -170,10 +169,8 @@ RCT_EXPORT_METHOD(
     [self.class.branch continueUserActivity:userActivity];
 }
 
-=======
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpartial-availability"
->>>>>>> f62a77533667c4ace21f025ee71dec7a1d32ae91
 + (BOOL)continueUserActivity:(NSUserActivity *)userActivity {
     return [self.branch continueUserActivity:userActivity];
 }
