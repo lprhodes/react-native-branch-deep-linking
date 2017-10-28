@@ -244,6 +244,14 @@ RCT_EXPORT_METHOD(
     resolve(initSessionWithLaunchOptionsResult ?: [NSNull null]);
 }
 
+
+#pragma mark clearInitSessionResult
+RCT_EXPORT_METHOD(
+                  clearInitSessionResult
+                  ) {
+    initSessionWithLaunchOptionsResult = [NSNull null];
+}
+
 #pragma mark getLatestReferringParams
 RCT_EXPORT_METHOD(
                   getLatestReferringParams:(RCTPromiseResolveBlock)resolve

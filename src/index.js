@@ -28,6 +28,10 @@ class Branch {
     if (options.debug) this._debug = true
   }
 
+  clearInitSessionResult() {
+    RNBranch.clearInitSessionResult()
+  }
+
   subscribe(listener) {
     /*
      * If this is within the INIT_SESSION_TTL, get the cached value from the native layer (asynchronously).
