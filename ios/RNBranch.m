@@ -152,6 +152,16 @@ RCT_EXPORT_MODULE();
     return handled;
 }
 
+RCT_EXPORT_METHOD(
+                  handleDeepLinkInternal:(NSURL *)url
+                  ) {
+    
+    NSUserActivity *userActivity = [[NSUserActivity alloc] initWithActivityType:NSUserActivityTypeBrowsingWeb];
+    userActivity.webpageURL = url;
+    
+    [self.class.branch continueUserActivity:userActivity];
+}
+
 + (BOOL)continueUserActivity:(NSUserActivity *)userActivity {
     return [self.branch continueUserActivity:userActivity];
 }
