@@ -1,16 +1,31 @@
-var fs = require('fs')
-var log = require('npmlog')
+const fs = require('fs')
+const log = require('npmlog')
+const path = require('path')
+
+log.heading = 'react-native-branch'
 
 function addBranchConfigToAndroidAssetsFolder() {
-  if (fs.existsSync('./branch.json')) {
+  if (fs.existsSync(path.join('.', 'branch.android.json'))) {
     ensureAndroidAssetsFolder('main')
-    addSymbolicLink('../../../../../branch.json', './android/app/src/main/assets/branch.json')
+    addSymbolicLink(path.join('..', '..', '..', '..', '..', 'branch.android.json'),
+      path.join('.', 'android', 'app', 'src', 'main', 'assets', 'branch.json'))
+  }
+  else if (fs.existsSync(path.join('.', 'branch.json'))) {
+    ensureAndroidAssetsFolder('main')
+    addSymbolicLink(path.join('..', '..', '..', '..', '..', 'branch.json'),
+      path.join('.', 'android', 'app', 'src', 'main', 'assets', 'branch.json'))
   }
 
-  // branch.debug.json will be available as branch.json in debug builds
-  if (fs.existsSync('./branch.debug.json')) {
+  // branch[.android].debug.json will be available as branch.json in debug builds
+  if (fs.existsSync(path.join('.', 'branch.android.debug.json'))) {
     ensureAndroidAssetsFolder('debug')
-    addSymbolicLink('../../../../../branch.debug.json', './android/app/src/debug/assets/branch.json')
+    addSymbolicLink(path.join('..', '..', '..', '..', '..', 'branch.android.debug.json'),
+      path.join('.', 'android', 'app', 'src', 'debug', 'assets', 'branch.json'))
+  }
+  else if (fs.existsSync('./branch.debug.json')) {
+    ensureAndroidAssetsFolder('debug')
+    addSymbolicLink(path.join('..', '..', '..', '..', '..', 'branch.debug.json'),
+      path.join('.', 'android', 'app', 'src', 'debug', 'assets', 'branch.json'))
   }
 
   log.info('Added Branch configuration to android project')
@@ -18,9 +33,9 @@ function addBranchConfigToAndroidAssetsFolder() {
 
 function addSymbolicLink(linkPath, path) {
   try {
-    var stats = fs.lstatSync(path)
+    const stats = fs.lstatSync(path)
     if (stats && stats.isSymbolicLink()) {
-      var dest = fs.readlinkSync(path)
+      const dest = fs.readlinkSync(path)
       if (dest == linkPath) {
         log.warn(path + ' already present in Android app')
         return
@@ -46,7 +61,12 @@ function addSymbolicLink(linkPath, path) {
 
 function removeSymbolicLink(path) {
   try {
-    var stats = fs.lstatSync(path)
+    const stats = fs.lstatSync(path)
+
+    if (!stats.isSymbolicLink()) {
+      log.warn(path + ' is not a symbolic link. Not removing.')
+      return
+    }
   }
   catch (error) {
     if (error.code != 'ENOENT') throw error
@@ -54,21 +74,16 @@ function removeSymbolicLink(path) {
     return
   }
 
-  if (!stats.isSymbolicLink()) {
-    log.warn(path + ' is not a symbolic link. Not removing.')
-    return
-  }
-
   fs.unlink(path)
 }
 
 function ensureAndroidAssetsFolder(buildType) {
-  ensureDirectory('./android/app/src/' + buildType + '/assets')
+  ensureDirectory(path.join('.', 'android', 'app', 'src', buildType, 'assets'))
 }
 
 function ensureDirectory(path) {
   try {
-    var stats = fs.statSync(path)
+    const stats = fs.statSync(path)
 
     if (!stats.isDirectory()) {
       throw(srcDir + ' exists and is not a directory.')
@@ -77,7 +92,7 @@ function ensureDirectory(path) {
   catch (error) {
     if (error.code != 'ENOENT') throw error
 
-    var parent = dirname(path)
+    const parent = dirname(path)
     if (parent !== path) ensureDirectory(parent)
 
     fs.mkdirSync(path, 0o777)
@@ -85,15 +100,29 @@ function ensureDirectory(path) {
 }
 
 function dirname(path) {
-  if (!path.match(/\//)) return path
+  if (!path.search(path.sep)) return path
 
-  return /^(.*)\/[^/]+$/.exec(path)[1]
+  const components = path.split(path.sep)
+  components.splice(components.count - 1, 1)
+  return components.join(path.sep)
 }
 
 function removeBranchConfigFromAndroidAssetsFolder() {
-  removeSymbolicLink('./android/app/src/main/assets/branch.json')
-  removeSymbolicLink('./android/app/src/debug/assets/branch.json')
-  log.info('removed Branch configuration from Android project.')
+  removeSymbolicLink(path.join('.', 'android', 'app', 'src', 'main', 'assets', 'branch.json'))
+  removeSymbolicLink(path.join('.', 'android', 'app', 'src', 'debug', 'assets', 'branch.json'))
+  log.info('Removed Branch configuration from Android project')
+}
+
+function androidPackageName() {
+  const path = path.join('.', 'android', 'app', 'src', 'main', 'AndroidManifest.xml')
+  manifest = fs.readFileSync(path)
+  const regex = /package=["']([A-Za-z\.0-9])["']/
+  if (!manifest.match(regex)) throw 'package name not found in ' + path
+  return regex.exec(manifest)[1]
+}
+
+function androidPackageDir() {
+  return path.join('.', 'android', 'app', 'src', 'main', 'java', androidPackageName().replace(/\./, path.sep))
 }
 
 module.exports = {

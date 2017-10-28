@@ -68,15 +68,7 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
     }
 
     public static void initSession(final Uri uri, Activity reactActivity) {
-        Branch branch = Branch.getInstance(reactActivity.getApplicationContext());
-
-        RNBranchConfig config = new RNBranchConfig(reactActivity);
-        if (config.getDebugMode()) {
-            Log.d(REACT_CLASS, "debugMode true in branch.json. calling setDebug().");
-            branch.setDebug();
-        }
-
-        if (mUseDebug) branch.setDebug();
+        Branch branch = setupBranch(reactActivity.getApplicationContext());
 
         mActivity = reactActivity;
         branch.initSession(new Branch.BranchReferralInitListener(){
@@ -293,6 +285,22 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void sendCommerceEvent(String revenue, ReadableMap metadata, final Promise promise) throws JSONException {
+        Branch branch = Branch.getInstance();
+
+        CommerceEvent commerceEvent = new CommerceEvent();
+        commerceEvent.setRevenue(Double.parseDouble(revenue));
+
+        JSONObject jsonMetadata = null;
+        if (metadata != null) {
+            jsonMetadata = convertMapToJson(metadata);
+        }
+
+        branch.sendCommerceEvent(commerceEvent, jsonMetadata, null);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
     public void showShareSheet(String ident, ReadableMap shareOptionsMap, ReadableMap linkPropertiesMap, ReadableMap controlParamsMap, Promise promise) {
         Context context = getReactApplicationContext();
 
@@ -410,14 +418,38 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
             @Override
             public void onLinkCreate(String url, BranchError error) {
                 Log.d(REACT_CLASS, "onLinkCreate " + url);
+                if (error != null) {
+                    if (error.getErrorCode() == BranchError.ERR_BRANCH_DUPLICATE_URL) {
+                        promise.reject("RNBranch::Error::DuplicateResourceError", error.getMessage());
+                    }
+                    else {
+                        promise.reject("RNBranch::Error", error.getMessage());
+                    }
+                    return;
+                }
+
                 WritableMap map = new WritableNativeMap();
                 map.putString("url", url);
-                if (error != null) {
-                    map.putString("error", error.toString());
-                }
                 promise.resolve(map);
             }
         });
+    }
+
+    @ReactMethod
+    public void openURL(String url, ReadableMap options) {
+        if (mActivity == null) {
+            // initSession is called before JS loads. This probably indicates failure to call initSession
+            // in an activity.
+            Log.e(REACT_CLASS, "Branch native Android SDK not initialized in openURL");
+            return;
+        }
+
+        Intent intent = new Intent(mActivity, mActivity.getClass());
+        intent.putExtra("branch", url);
+        intent.putExtra("branch_force_new_session", true);
+
+        if (options.hasKey("newActivity") && options.getBoolean("newActivity")) mActivity.finish();
+        mActivity.startActivity(intent);
     }
 
     public static LinkProperties createLinkProperties(ReadableMap linkPropertiesMap, @Nullable ReadableMap controlParams){
@@ -446,6 +478,26 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
         }
 
         return linkProperties;
+    }
+
+    private static Branch setupBranch(Context context) {
+        RNBranchConfig config = new RNBranchConfig(context);
+        String branchKey = config.getBranchKey();
+        if (branchKey == null) branchKey = config.getUseTestInstance() ? config.getTestKey() : config.getLiveKey();
+
+        /*
+         * This differs a little from iOS. If you add "useTestInstance": true to branch.json but
+         * don't add the testKey, on iOS, it will use the test key from the Info.plist if configured.
+         * On Android, useTestInstance in branch.json will be ignored unless testKey is present. If
+         * testKey is not specified in branch.json, it's necessary to add io.branch.sdk.TestMode to
+         * the Android manifest to use the test instance. It's not clear if there's a programmatic
+         * way to select the test key without specifying the key explicitly.
+         */
+        Branch branch = branchKey != null ? Branch.getInstance(context, branchKey) : Branch.getInstance(context);
+
+        if (mUseDebug || config.getDebugMode()) branch.setDebug();
+
+        return branch;
     }
 
     private BranchUniversalObject findUniversalObjectOrReject(final String ident, final Promise promise) {
@@ -520,6 +572,7 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
                 String metadataKey = iterator.nextKey();
                 Object metadataObject = getReadableMapObjectForKey(metadataMap, metadataKey);
                 branchUniversalObject.addContentMetadata(metadataKey, metadataObject.toString());
+                HashMap<String, String> metadata = branchUniversalObject.getMetadata();
             }
         }
 
@@ -539,9 +592,9 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void loadRewards(Promise promise)
+    public void loadRewards(String bucket, Promise promise)
     {
-        Branch.getInstance().loadRewards(new LoadRewardsListener(promise));
+        Branch.getInstance().loadRewards(new LoadRewardsListener(bucket, promise));
     }
 
     @ReactMethod
@@ -602,16 +655,23 @@ public class RNBranchModule extends ReactContextBaseJavaModule {
 
     protected class LoadRewardsListener implements Branch.BranchReferralStateChangedListener
     {
+        private String _bucket;
         private Promise _promise;
 
-        public LoadRewardsListener(Promise promise) {
+        public LoadRewardsListener(String bucket, Promise promise) {
+            this._bucket = bucket;
             this._promise = promise;
         }
 
         @Override
         public void onStateChanged(boolean changed, BranchError error) {
             if (error == null) {
-                int credits = Branch.getInstance().getCredits();
+                int credits = 0;
+                if (this._bucket == null) {
+                  credits = Branch.getInstance().getCredits();
+                } else {
+                  credits = Branch.getInstance().getCreditsForBucket(this._bucket);
+                }
                 WritableMap map = new WritableNativeMap();
                 map.putInt("credits", credits);
                 this._promise.resolve(map);

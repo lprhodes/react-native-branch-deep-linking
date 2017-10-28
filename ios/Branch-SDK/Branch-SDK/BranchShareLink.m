@@ -12,6 +12,7 @@
 #import "BranchActivityItemProvider.h"
 #import "BNCDeviceInfo.h"
 #import "BNCXcode7Support.h"
+#import "BNCLog.h"
 @class BranchShareActivityItem;
 
 typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
@@ -93,7 +94,7 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
     if (!(self.universalObject.canonicalIdentifier ||
           self.universalObject.canonicalUrl ||
           self.universalObject.title)) {
-        NSLog(@"Warning: A canonicalIdentifier, canonicalURL, or title are required to uniquely"
+        BNCLogWarning(@"A canonicalIdentifier, canonicalURL, or title are required to uniquely"
                " identify content. In order to not break the end user experience with sharing,"
                " Branch SDK will proceed to create a URL, but content analytics may not properly"
                " include this URL.");
@@ -126,8 +127,11 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
             andFeature:self.linkProperties.feature
             andStage:self.linkProperties.stage
             andAlias:self.linkProperties.alias];
-    NSURL *URL = [[NSURL alloc] initWithString:URLString];
-    item = [[BranchShareActivityItem alloc] initWithPlaceholderItem:URL];
+    self.shareURL = [[NSURL alloc] initWithString:URLString];
+    if (self.returnURL)
+        item = [[BranchShareActivityItem alloc] initWithPlaceholderItem:self.shareURL];
+    else
+        item = [[BranchShareActivityItem alloc] initWithPlaceholderItem:self.shareURL.absoluteString];
     item.itemType = BranchShareActivityItemTypeBranchURL;
     item.parent = self;
     [items addObject:item];
@@ -158,18 +162,22 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
     shareViewController.title = self.title;
 
     if ([shareViewController respondsToSelector:@selector(completionWithItemsHandler)]) {
+
         shareViewController.completionWithItemsHandler =
-        ^ (NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
-            [self shareDidComplete:completed activityError:activityError];
-        };
+            ^ (NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
+                [self shareDidComplete:completed activityError:activityError];
+            };
+
     } else {
+
         #pragma clang diagnostic push
         #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         shareViewController.completionHandler =
-        ^ (UIActivityType activityType, BOOL completed) {
-            [self shareDidComplete:completed activityError:nil];
-        };
+            ^ (UIActivityType activityType, BOOL completed) {
+                [self shareDidComplete:completed activityError:nil];
+            };
         #pragma clang diagnostic pop
+        
     }
 
     if (self.linkProperties.controlParams[BRANCH_LINK_DATA_KEY_EMAIL_SUBJECT]) {
@@ -178,8 +186,8 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
                 setValue:self.linkProperties.controlParams[BRANCH_LINK_DATA_KEY_EMAIL_SUBJECT]
                 forKey:@"subject"];
         }
-        @catch (NSException *exception) {
-            NSLog(@"Warning: Unable to setValue 'emailSubject' forKey 'subject' on UIActivityViewController.");
+        @catch (NSException*) {
+            BNCLogWarning(@"Unable to setValue 'emailSubject' forKey 'subject' on UIActivityViewController.");
         }
     }
 
@@ -195,7 +203,7 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
     }
 
     if (!presentingViewController) {
-        NSLog(@"[Branch] Error: No view controller is present to show the share sheet. Aborting.");
+        BNCLogError(@"No view controller is present to show the share sheet. Not showing sheet.");
         return;
     }
 
@@ -252,7 +260,17 @@ typedef NS_ENUM(NSInteger, BranchShareActivityItemType) {
             andAlias:self.linkProperties.alias
             ignoreUAString:userAgentString
             forceLinkCreation:YES];
-    return [NSURL URLWithString:URLString];
+    self.shareURL = [NSURL URLWithString:URLString];
+    return (self.returnURL) ? self.shareURL :self.shareURL.absoluteString;
+}
+
+- (BOOL) returnURL {
+    BOOL returnURL = YES;
+    if ([UIDevice currentDevice].systemVersion.doubleValue >= 11.0 &&
+        [self.activityType isEqualToString:UIActivityTypeCopyToPasteboard]) {
+        returnURL = NO;
+    }
+    return returnURL;
 }
 
 @end

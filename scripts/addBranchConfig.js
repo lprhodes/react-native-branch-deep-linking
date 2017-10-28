@@ -1,12 +1,27 @@
-var androidUtil = require('./androidUtil')
-var fs = require('fs')
-var iosUtil = require('./iosUtil')
+const androidUtil = require('./androidUtil')
+const fs = require('fs')
+const log = require('npmlog')
+const path = require('path')
+const iosUtil = require('./iosUtil')
 
-// TODO: Should it be possible to use just branch.debug.json w/o branch.json?
-// This seems like an unlikely configuration. Maybe the check should just be
-// for branch.json, or if just branch.debug.json exists, a warning should be
-// generated.
-if (!fs.existsSync('./branch.json') && !fs.existsSync('./branch.debug.json')) {
+log.heading = 'react-native-branch'
+
+let exists = false
+const files = [
+  'branch.json',
+  'branch.android.json',
+  'branch.android.debug.json',
+  'branch.debug.json',
+  'branch.ios.json',
+  'branch.ios.debug.json'
+]
+
+files.forEach(function(file) {
+  exists = exists || fs.existsSync(path.join('.', file))
+})
+
+if (!exists) {
+  log.info('branch.json not found. See https://rnbranch.app.link/branch-json for more information.')
   return
 }
 

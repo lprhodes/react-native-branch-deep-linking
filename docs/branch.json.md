@@ -12,7 +12,7 @@ certain methods in the native SDKs that must be called before the native SDK ini
 ## Add the files to your project
 
 Be sure to commit `branch.json` and `branch.debug.json` to source control after adding
-them to your project.
+them to your project (after running `react-native link`).
 
 ### Using react-native link
 
@@ -48,10 +48,30 @@ Add `branch.json` to your Xcode project using File > Add Files to "MyProject.xco
 Also add it to the Copy Bundle Resources build phase for each application target in
 the project that uses the Branch SDK.
 
-## Configurations for debug and release builds
+## Branch configuration per build type and platform
 
 It is possible to include different versions of the configuration for debug and release
-builds.
+builds as well as for iOS and Android. The following files will be used, in order.
+
+### Android debug
+- branch.android.debug.json
+- branch.debug.json
+- branch.android.json
+- branch.json
+
+### Android release
+- branch.android.json
+- branch.json
+
+### iOS debug
+- branch.ios.debug.json
+- branch.debug.json
+- branch.ios.json
+- branch.json
+
+### iOS release
+- branch.ios.json
+- branch.json
 
 ### Using react-native link
 
@@ -74,6 +94,8 @@ of `branch.json`.
 |key|description|type|
 |---|---|---|
 |debugMode|If true, `setDebug` will be called in the native SDK, enabling testing of install events.|Boolean|
+|appleSearchAdsDebugMode|If true, `setAppleSearchAdsDebugMode` will be called on the iOS Branch instance. Ignored on Android.|Boolean|
+|delayInitToCheckForSearchAds|If true, `delayInitToCheckForSearchAds` will be called on the iOS Branch instance. Ignored on Android.|Boolean|
 
 ## Example
 
@@ -81,6 +103,8 @@ See [branch.example.json](https://github.com/BranchMetrics/react-native-branch-d
 
 ```json
 {
-  "debugMode": true
+    "debugMode": true,
+    "delayInitToCheckForSearchAds": true,
+    "appleSearchAdsDebugMode": true
 }
 ```

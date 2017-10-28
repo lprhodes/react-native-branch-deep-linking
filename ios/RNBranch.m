@@ -24,6 +24,7 @@ static NSString * const IdentFieldName = @"ident";
 static NSString * const RNBranchErrorDomain = @"RNBranchErrorDomain";
 static NSInteger const RNBranchUniversalObjectNotFoundError = 1;
 
+
 #pragma mark - Private RNBranch declarations
 
 @interface RNBranch()
@@ -41,7 +42,7 @@ RCT_EXPORT_MODULE();
 
 + (Branch *)branch
 {
-    @synchronized(self.class) {
+    @synchronized(self) {
         static Branch *instance;
         static dispatch_once_t once = 0;
         dispatch_once(&once, ^{
@@ -49,17 +50,17 @@ RCT_EXPORT_MODULE();
 
             // YES if either [RNBranch useTestInstance] was called or useTestInstance: true is present in branch.json.
             BOOL usingTestInstance = useTestInstance || config.useTestInstance;
-            NSString *key = usingTestInstance ? config.testKey : config.liveKey;
+            NSString *key = config.branchKey ?: usingTestInstance ? config.testKey : config.liveKey;
 
             if (key) {
                 // Override the Info.plist if these are present.
-                RCTLog(@"Using Branch key %@ from branch.json", key);
                 instance = [Branch getInstance: key];
             }
             else {
-                instance = usingTestInstance ? [Branch getTestInstance] : [Branch getInstance];
+                [Branch setUseTestBranchKey:usingTestInstance];
+                instance = [Branch getInstance];
             }
-            
+
             [self setupBranchInstance:instance];
         });
         return instance;
@@ -71,6 +72,12 @@ RCT_EXPORT_MODULE();
     RNBranchConfig *config = RNBranchConfig.instance;
     if (config.debugMode) {
         [instance setDebug];
+    }
+    if (config.delayInitToCheckForSearchAds) {
+        [instance delayInitToCheckForSearchAds];
+    }
+    if (config.appleSearchAdsDebugMode) {
+        [instance setAppleSearchAdsDebugMode];
     }
 }
 
@@ -152,6 +159,7 @@ RCT_EXPORT_MODULE();
     return handled;
 }
 
+<<<<<<< HEAD
 RCT_EXPORT_METHOD(
                   handleDeepLinkInternal:(NSURL *)url
                   ) {
@@ -162,9 +170,14 @@ RCT_EXPORT_METHOD(
     [self.class.branch continueUserActivity:userActivity];
 }
 
+=======
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpartial-availability"
+>>>>>>> f62a77533667c4ace21f025ee71dec7a1d32ae91
 + (BOOL)continueUserActivity:(NSUserActivity *)userActivity {
     return [self.branch continueUserActivity:userActivity];
 }
+#pragma clang diagnostic pop
 
 #pragma mark - Object lifecycle
 
@@ -189,8 +202,13 @@ RCT_EXPORT_METHOD(
 - (UIViewController *)currentViewController
 {
     UIViewController *current = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (current.presentedViewController && ![current.presentedViewController isKindOfClass:UIAlertController.class]) {
-        current = current.presentedViewController;
+    if (@available(iOS 8.0, *)) {
+        while (current.presentedViewController && ![current.presentedViewController isKindOfClass:UIAlertController.class]) {
+            current = current.presentedViewController;
+        }
+    } else {
+        // RN Requires iOS 8. Nothing to do here. Still.
+        while (current.presentedViewController) current = current.presentedViewController;
     }
     return current;
 }
@@ -292,11 +310,31 @@ RCT_EXPORT_METHOD(
     [self.class.branch logout];
 }
 
+#pragma mark openURL
+RCT_EXPORT_METHOD(
+                  openURL:(NSString *)urlString
+                  ) {
+    [self.class.branch handleDeepLinkWithNewSession:[NSURL URLWithString:urlString]];
+}
+
 #pragma mark userCompletedAction
 RCT_EXPORT_METHOD(
                   userCompletedAction:(NSString *)event withState:(NSDictionary *)appState
                   ) {
     [self.class.branch userCompletedAction:event withState:appState];
+}
+
+#pragma mark sendCommerceEvent
+RCT_EXPORT_METHOD(
+                  sendCommerceEvent:(NSString *)revenue
+                  metadata:(NSDictionary *)metadata
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(__unused RCTPromiseRejectBlock)reject
+                  ) {
+    BNCCommerceEvent *commerceEvent = [BNCCommerceEvent new];
+    commerceEvent.revenue = [NSDecimalNumber decimalNumberWithString:revenue];
+    [self.class.branch sendCommerceEvent:commerceEvent metadata:metadata withCompletion:nil];
+    resolve(NSNull.null);
 }
 
 #pragma mark userCompletedActionOnUniversalObject
@@ -404,8 +442,12 @@ RCT_EXPORT_METHOD(
         if (!error) {
             RCTLogInfo(@"RNBranch Success");
             resolve(@{ @"url": url });
-        } else {
-            reject([NSString stringWithFormat: @"%lu", (long)error.code], error.localizedDescription, error);
+        }
+        else if (error.code == BNCDuplicateResourceError) {
+            reject(@"RNBranch::Error::DuplicateResourceError", error.localizedDescription, error);
+        }
+        else {
+            reject(@"RNBranch::Error", error.localizedDescription, error);
         }
     }];
 }
@@ -457,12 +499,18 @@ RCT_EXPORT_METHOD(
 
 #pragma mark loadRewards
 RCT_EXPORT_METHOD(
-                  loadRewards:(RCTPromiseResolveBlock)resolve
+                  loadRewards:(NSString *)bucket
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject
                   ) {
     [self.class.branch loadRewardsWithCallback:^(BOOL changed, NSError *error) {
         if(!error) {
-            int credits = (int)[self.class.branch getCredits];
+            int credits = 0;
+            if (bucket) {
+                credits = (int)[self.class.branch getCreditsForBucket:bucket];
+            } else {
+                credits = (int)[self.class.branch getCredits];
+            }
             resolve(@{@"credits": @(credits)});
         } else {
             RCTLogError(@"Load Rewards Error: %@", error.localizedDescription);

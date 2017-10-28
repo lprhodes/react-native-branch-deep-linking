@@ -100,10 +100,19 @@ class Branch {
   logout = RNBranch.logout
   userCompletedAction = (event, state = {}) => RNBranch.userCompletedAction(event, state)
   getShortUrl = RNBranch.getShortUrl
+  sendCommerceEvent = (revenue, metadata) => {
+    return RNBranch.sendCommerceEvent('' + revenue, metadata)
+  }
+  openURL = (url, options = {}) => {
+    return Platform.select({
+      android: () => RNBranch.openURL(url, options),
+      ios: () => RNBranch.openURL(url)
+    })()
+  }
 
   /*** Referral Methods ***/
   redeemRewards = (amount, bucket) => RNBranch.redeemRewards(amount, bucket)
-  loadRewards = RNBranch.loadRewards
+  loadRewards = (bucket) => RNBranch.loadRewards(bucket)
   getCreditHistory = RNBranch.getCreditHistory
 
   /*** BranchUniversalObject ***/
