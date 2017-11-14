@@ -412,6 +412,8 @@ typedef NS_ENUM(NSUInteger, BranchCreditHistoryOrder) {
 - (BOOL)handleDeepLink:(NSURL *)url;
 
 
+- (BOOL)handleDeepLink:(NSURL *)url fromSelf:(BOOL)isFromSelf;
+
 /**
  Have Branch end the current deep link session and start a new session with the provided URL.
 
